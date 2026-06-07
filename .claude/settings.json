@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(*.md)",
+      "Read(*.go)",
+      "Read(*.txt)",
+      "Read(*.json)",
+      "Read(*.xml)",
+      "Bash(ls *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "WebFetch",
+      "WebSearch"
+    ],
+    "ask": []
+  }
+}

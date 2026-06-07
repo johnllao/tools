@@ -30,3 +30,16 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Claude Code
+.claude/settings.local.json
+.claude/agent-memory/
+.claude/memory/
+.claude/usage-data/
+.claude/worktrees/
+.claude/scheduled_tasks.json
+
+# Go binaries
+bin/
+foldermcp
+logsmcp
