@@ -43,6 +43,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Resolve the -root flag to an absolute path and validate that it
+	// exists and is a directory. Invalid paths cause an immediate exit
+	// with a descriptive error message.
 	var err error
 	rootFolder, err = filepath.Abs(*rootFlag)
 	if err != nil {
@@ -61,7 +64,8 @@ func main() {
 	)
 
 	// -----------------------------------------------------------------------
-	// Tool: list_log_files
+	// list_log_files tool — walks the root folder and returns the relative
+	// paths of all files with known log extensions (.json, .jsonl, .log).
 	// -----------------------------------------------------------------------
 
 	listTool := mcp.NewTool("list_log_files",
@@ -71,7 +75,10 @@ func main() {
 	s.AddTool(listTool, handleListLogFiles)
 
 	// -----------------------------------------------------------------------
-	// Tool: read_logs
+	// -----------------------------------------------------------------------
+	// read_logs tool — reads a log file and filters entries by level,
+	// text search, or tail count, with an optional limit on the number
+	// of entries returned.
 	// -----------------------------------------------------------------------
 
 	readTool := mcp.NewTool("read_logs",
@@ -114,6 +121,10 @@ func main() {
 func handleListLogFiles(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var files []string
 
+	// Walk the root folder recursively. For each file whose extension
+	// matches a known log extension (.json, .jsonl, .log), compute its
+	// relative path and collect it. Directories and non-log files are
+	// silently skipped.
 	err := filepath.WalkDir(rootFolder, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -135,6 +146,8 @@ func handleListLogFiles(_ context.Context, req mcp.CallToolRequest) (*mcp.CallTo
 		return mcp.NewToolResultError(fmt.Sprintf("Error walking folder: %s", err)), nil
 	}
 
+	// No matching log files found — return a friendly message instead of
+	// an empty response.
 	if len(files) == 0 {
 		return mcp.NewToolResultText("No log files found."), nil
 	}
