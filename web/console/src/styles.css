@@ -1,0 +1,142 @@
+@font-face {
+    font-display: swap;
+    font-family: 'Open Sans';
+    font-style: normal;
+    font-weight: 400;
+    src: url('./fonts/OpenSans-Regular.ttf') format('truetype');
+}
+
+@font-face {
+    font-display: swap;
+    font-family: 'Open Sans';
+    font-style: normal;
+    font-weight: 600;
+    src: url('./fonts/OpenSans-SemiBold.ttf') format('truetype');
+}
+
+@font-face {
+    font-display: swap;
+    font-family: 'Open Sans';
+    font-style: normal;
+    font-weight: 700;
+    src: url('./fonts/OpenSans-Bold.ttf') format('truetype');
+}
+
+:root {
+    --accent: #4fc3f7;
+    --accent-hover: #29b6f6;
+    --bg-primary: #27374d;
+    --bg-secondary: #526d82;
+    --bg-surface: #526d82;
+    --border: #9db2bf;
+    --error: #ef5350;
+    --scrollbar-thumb: #9db2bf;
+    --scrollbar-track: #27374d;
+    --success: #66bb6a;
+    --text-muted: #9db2bf;
+    --text-primary: #dde6ed;
+    --text-secondary: #9db2bf;
+    --warning: #ffa726;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body, #root {
+    height: 100%;
+}
+
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Open Sans', system-ui, -apple-system, sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar styling for dark theme */
+::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+/* Selection color */
+::selection {
+    background: var(--accent);
+    color: var(--bg-primary);
+}
+
+/* ── Layout ────────────────────────────────────────────── */
+
+.app-layout {
+    display: flex;
+    height: 100%;
+}
+
+.sidebar {
+    background: color-mix(in srgb, var(--bg-secondary), black 60%);
+    min-width: 260px;
+    overflow-y: auto;
+    padding: 1.5rem 1rem;
+    width: 260px;
+}
+
+.content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 2rem;
+}
+
+/* ── Sidebar nav ───────────────────────────────────────── */
+
+.sidebar-title {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    margin-bottom: 1rem;
+    padding: 0 0.75rem;
+    text-transform: uppercase;
+}
+
+.nav-list {
+    list-style: none;
+}
+
+.nav-item {
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 0.6rem 0.75rem;
+    transition: background 0.15s, color 0.15s;
+}
+
+.nav-item:hover,
+.nav-item.active {
+    background: color-mix(in srgb, var(--bg-surface), black 40%);
+    color: var(--text-primary);
+}
+
+.nav-item.active {
+    color: var(--accent);
+}
