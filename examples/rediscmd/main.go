@@ -6,9 +6,11 @@
 //	rediscmd -input <csv-file> -prefix <redis-key-prefix>
 //
 // The CSV header row provides the hash field names. The first column serves as
-// the ID and is appended to the prefix to form the Redis key. All keys are also
-// added to a Redis Set (keyed by the prefix itself) via SADD, so the set serves
-// as an index — e.g. SMEMBERS STATIC:CUSTOMER: returns every customer key.
+// the ID and is appended to the prefix to form the Redis hash key. The bare ID
+// (not the full key) is added to a Redis Set (keyed by the prefix itself) via
+// SADD, so the set serves as a pure ID index — e.g. SMEMBERS STATIC:CUSTOMER:
+// returns every customer ID, and clients reconstruct the hash key by joining
+// the prefix with each ID.
 //
 // Example:
 //
@@ -23,9 +25,9 @@
 // Output:
 //
 //	HSET STATIC:CUSTOMER:1 Name "John Doe" Email "john@example.com"
-//	SADD STATIC:CUSTOMER: STATIC:CUSTOMER:1
+//	SADD STATIC:CUSTOMER: 1
 //	HSET STATIC:CUSTOMER:2 Name "Jane Smith" Email "jane@example.com"
-//	SADD STATIC:CUSTOMER: STATIC:CUSTOMER:2
+//	SADD STATIC:CUSTOMER: 2
 package main
 
 import (
@@ -140,8 +142,11 @@ func main() {
 		}
 
 		fmt.Println(strings.Join(parts, " "))
-		// Emit SADD to add this key to the index set (keyed by the prefix).
-		fmt.Printf("SADD %s %s\n", *prefix, key)
+		// Emit SADD to add only the row's ID to the index set. The set
+		// stores bare IDs (not full keys), so SMEMBERS <prefix> returns
+		// the list of IDs, which clients combine with the prefix to
+		// reconstruct the hash keys.
+		fmt.Printf("SADD %s %s\n", *prefix, id)
 		emitted = true
 	}
 
