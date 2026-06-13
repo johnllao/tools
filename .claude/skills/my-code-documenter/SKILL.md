@@ -4,6 +4,6 @@ description: Document the description, purpose, application and code logic of ea
 argument-hint: component_name component_path
 ---
 
-Create or update an existing documentation file REFERENCE.md in the $1 folder 
+Create or update REFERENCE.md documentation for $0 in the $1 folder 
 - Should document the description, purpose, application and code logic of each types, functions, field, constants, variables. 
 - Should allow AI or other LLMs to read this and used as a reference to do enhancements later

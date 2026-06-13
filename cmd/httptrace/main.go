@@ -7,24 +7,26 @@
 //
 // Usage:
 //
-//	httptrace [-port <proxy-port>] [-log-file <path>]
+//	httptrace [-port <proxy-port>] [-log-file <path>] [-upstream-proxy <url>]
 //
-// The proxy is controlled via Unix signals:
-//
-//	SIGUSR1      start the proxy on the configured port
-//	SIGUSR2      stop the proxy (captured sessions are preserved)
-//	SIGINT/SIGTERM  flush the log and exit
+// The proxy starts immediately on launch and runs until the process receives
+// SIGINT (Ctrl+C) or SIGTERM, at which point it gracefully shuts down, flushes
+// the log, and exits.
 //
 // Captured sessions are written as JSON Lines (one JSON object per line).
 // By default output goes to stdout; use -log-file to write to a file.
 //
+// In corporate environments that require an upstream proxy, use -upstream-proxy
+// to route all outbound traffic through it. When not set, goproxy reads the
+// HTTP_PROXY and HTTPS_PROXY environment variables.
+//
 // Examples:
 //
-//	httptrace -port 8090 -log-file traces.jsonl
+//	httptrace -port 8080 -log-file traces.jsonl
+//	httptrace -port 8080 -upstream-proxy http://corp-proxy:3128
 //	httptrace > traces.jsonl &
-//	kill -SIGUSR1 <pid>    # start capturing
 //	curl --proxy http://localhost:8080 http://example.com
-//	kill -SIGUSR2 <pid>    # stop capturing
+//	kill <pid>             # graceful shutdown
 //	tail -f traces.jsonl | jq '.request.url'
 package main
 
@@ -40,6 +42,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -52,9 +55,6 @@ import (
 )
 
 // --- Package-level state -----------------------------------------------------
-
-// proxyPort is the port the proxy listens on. It is set from the -port CLI flag.
-var proxyPort int
 
 // maxBodySize is the maximum number of body bytes to capture per request or
 // response. Larger bodies are truncated in the stored session. Set from the
@@ -83,21 +83,6 @@ var (
 	// goroutines do not interleave their output.
 	logMu sync.Mutex
 )
-
-// --- Proxy runtime state (guarded by proxyMu) --------------------------------
-
-// proxyMu guards all proxy-runtime fields below.
-var proxyMu sync.Mutex
-
-// proxyServer is the running HTTP proxy server. Set when the proxy starts,
-// cleared when it stops. Used to perform a graceful shutdown.
-var proxyServer *http.Server
-
-// proxyRunning indicates whether the proxy is currently accepting connections.
-var proxyRunning bool
-
-// proxyStartTime records the moment the proxy was most recently started.
-var proxyStartTime time.Time
 
 // --- Session storage (guarded by sessionsMu) ---------------------------------
 
@@ -239,13 +224,13 @@ func writeSessionToLog(s *Session) {
 
 // --- main --------------------------------------------------------------------
 
-// main is the entry point. It parses CLI flags, sets up signal handlers for
-// proxy lifecycle control, and writes captured sessions as JSON Lines to the
-// configured output.
+// main is the entry point. It parses CLI flags, starts the proxy immediately,
+// and blocks until SIGINT (Ctrl+C) or SIGTERM, then gracefully shuts down and
+// writes captured sessions as JSON Lines to the configured output.
 //
 // Usage:
 //
-//	httptrace [-port <proxy-port>] [-log-file <path>]
+//	httptrace [-port <proxy-port>] [-log-file <path>] [-upstream-proxy <url>]
 func main() {
 	portFlag := flag.Int("port", 8080, "Proxy listen port")
 	logFileFlag := flag.String("log-file", "", "Path to write captured sessions as JSON Lines (default: stdout)")
@@ -253,9 +238,10 @@ func main() {
 	maxBodyFlag := flag.Int("max-body-size", 65536, "Maximum body bytes to capture per request/response (64 KB default)")
 	certFlag := flag.String("cert", "", "Path to a custom CA certificate file (PEM) for HTTPS MITM")
 	keyFlag := flag.String("key", "", "Path to the private key for the custom CA certificate")
+	upstreamFlag := flag.String("upstream-proxy", "", "Upstream HTTP proxy URL for corporate environments (e.g., http://proxy.corp.com:8080)")
 	flag.Parse()
 
-	proxyPort = *portFlag
+	proxyPort := *portFlag
 	maxSessions = *maxSessFlag
 	maxBodySize = *maxBodyFlag
 
@@ -290,60 +276,33 @@ func main() {
 		logWriter = bufio.NewWriter(os.Stdout)
 	}
 
-	fmt.Fprintf(os.Stderr, "httptrace ready (PID %d).\n", os.Getpid())
-	fmt.Fprintf(os.Stderr, "  SIGUSR1  → start proxy on port %d\n", proxyPort)
-	fmt.Fprintf(os.Stderr, "  SIGUSR2  → stop proxy\n")
-	fmt.Fprintf(os.Stderr, "  SIGINT / SIGTERM → flush log and exit\n")
+	// Parse and validate the upstream proxy URL, if provided.
+	// When set, all outbound traffic is routed through this proxy.
+	upstreamURL, err := parseUpstreamProxyURL(*upstreamFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "httptrace: %s\n", err)
+		os.Exit(1)
+	}
 
-	// --- Start/stop signal handling (SIGUSR1 / SIGUSR2) --------------------
+	// Start the proxy immediately.
+	srv, err := startProxy(proxyPort, upstreamURL)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "httptrace: failed to start proxy: %s\n", err)
+		os.Exit(1)
+	}
+	fmt.Fprintf(os.Stderr, "httptrace: proxy started on port %d (PID %d)\n", proxyPort, os.Getpid())
+	if upstreamURL != nil {
+		fmt.Fprintf(os.Stderr, "  Upstream proxy: %s\n", upstreamURL.String())
+	}
+	fmt.Fprintf(os.Stderr, "  Press Ctrl+C to stop\n")
 
-	// usrCh receives start and stop signals on a dedicated channel so that
-	// INT/TERM can be handled independently on the main goroutine.
-	usrCh := make(chan os.Signal, 1)
-	signal.Notify(usrCh, syscall.SIGUSR1, syscall.SIGUSR2)
-
-	go func() {
-		for sig := range usrCh {
-			switch sig {
-			case syscall.SIGUSR1:
-				proxyMu.Lock()
-				if proxyRunning {
-					proxyMu.Unlock()
-					fmt.Fprintf(os.Stderr, "httptrace: proxy already running on port %d\n", proxyPort)
-					continue
-				}
-				proxyMu.Unlock()
-
-				if err := startProxy(proxyPort); err != nil {
-					fmt.Fprintf(os.Stderr, "httptrace: failed to start proxy: %s\n", err)
-					continue
-				}
-				fmt.Fprintf(os.Stderr, "httptrace: proxy started on port %d\n", proxyPort)
-
-			case syscall.SIGUSR2:
-				proxyMu.Lock()
-				if !proxyRunning {
-					proxyMu.Unlock()
-					fmt.Fprintf(os.Stderr, "httptrace: proxy is not running\n")
-					continue
-				}
-				proxyMu.Unlock()
-
-				stopProxy()
-				fmt.Fprintf(os.Stderr, "httptrace: proxy stopped\n")
-			}
-		}
-	}()
-
-	// --- Quit signal handling (SIGINT / SIGTERM) --------------------------
-
-	// Block the main goroutine on the quit signal.
+	// Block until SIGINT (Ctrl+C) or SIGTERM, then gracefully shut down.
 	quitCh := make(chan os.Signal, 1)
 	signal.Notify(quitCh, syscall.SIGINT, syscall.SIGTERM)
 	<-quitCh
 
-	fmt.Fprintf(os.Stderr, "httptrace: shutting down...\n")
-	stopProxy()
+	fmt.Fprintf(os.Stderr, "\nhttptrace: shutting down...\n")
+	stopProxy(srv)
 	logWriter.Flush()
 	if logFileOut != nil {
 		logFileOut.Sync()
@@ -354,13 +313,11 @@ func main() {
 // --- Proxy lifecycle ---------------------------------------------------------
 
 // startProxy creates and starts the goproxy MITM server on the given port.
-// It must NOT be called while holding proxyMu (it acquires the lock itself).
-func startProxy(port int) error {
-	proxyMu.Lock()
-	defer proxyMu.Unlock()
-
+// If upstreamURL is non-nil, all outbound traffic is routed through it.
+// It returns the *http.Server so the caller can shut it down later.
+func startProxy(port int, upstreamURL *url.URL) (*http.Server, error) {
 	// Build the proxy handler with request/response capture hooks.
-	proxy := newCaptureProxy()
+	proxy := newCaptureProxy(upstreamURL)
 
 	// If a custom CA was provided at startup, install it before the first
 	// HTTPS connection is handled.
@@ -368,10 +325,9 @@ func startProxy(port int) error {
 		goproxy.GoproxyCa = *customCA
 	}
 
-	addr := fmt.Sprintf(":%d", port)
-	ln, err := net.Listen("tcp", addr)
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
-		return fmt.Errorf("cannot listen on port %d: %w", port, err)
+		return nil, fmt.Errorf("cannot listen on port %d: %w", port, err)
 	}
 
 	srv := &http.Server{
@@ -379,11 +335,6 @@ func startProxy(port int) error {
 		// No ReadTimeout / WriteTimeout — the proxy passes through to the
 		// client and server, which control their own timeouts.
 	}
-
-	proxyServer = srv
-	proxyRunning = true
-	proxyPort = port
-	proxyStartTime = time.Now()
 
 	// Serve in a background goroutine. The proxy runs until stopProxy
 	// calls Shutdown on the server.
@@ -393,24 +344,40 @@ func startProxy(port int) error {
 		}
 	}()
 
-	return nil
+	return srv, nil
 }
 
-// stopProxy gracefully shuts down the running proxy. It is safe to call even
-// when the proxy is not running (it becomes a no-op).
-func stopProxy() {
-	proxyMu.Lock()
-	defer proxyMu.Unlock()
-
-	if proxyServer != nil {
-		// Give in-flight requests up to 5 seconds to complete before
-		// forcibly closing connections.
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		proxyServer.Shutdown(ctx)
-		proxyServer = nil
+// stopProxy gracefully shuts down the proxy server, giving in-flight requests
+// up to 5 seconds to complete before forcibly closing connections.
+func stopProxy(srv *http.Server) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("httptrace: proxy shutdown error: %s", err)
 	}
-	proxyRunning = false
+}
+
+// parseUpstreamProxyURL parses and validates the -upstream-proxy flag value.
+// Returns nil if the flag is empty (no upstream proxy configured).
+// Returns an error if the URL is missing a scheme or host.
+func parseUpstreamProxyURL(raw string) (*url.URL, error) {
+	if raw == "" {
+		return nil, nil
+	}
+
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("invalid upstream proxy URL %q: %w", raw, err)
+	}
+
+	if u.Scheme == "" {
+		return nil, fmt.Errorf("upstream proxy URL %q must have a scheme (http or https)", raw)
+	}
+	if u.Host == "" {
+		return nil, fmt.Errorf("upstream proxy URL %q must have a host", raw)
+	}
+
+	return u, nil
 }
 
 // --- Proxy capture setup -----------------------------------------------------
@@ -418,12 +385,28 @@ func stopProxy() {
 // newCaptureProxy creates a goproxy.ProxyHttpServer configured to capture
 // every HTTP request-response exchange into the in-memory session store and
 // write completed sessions to the log output.
-func newCaptureProxy() *goproxy.ProxyHttpServer {
+//
+// If upstreamURL is non-nil, all outbound traffic is routed through the
+// specified proxy. When nil, goproxy defaults apply (HTTP_PROXY/HTTPS_PROXY
+// environment variables).
+func newCaptureProxy(upstreamURL *url.URL) *goproxy.ProxyHttpServer {
 	proxy := goproxy.NewProxyHttpServer()
 
 	// Keep goproxy's own logging quiet — we handle capture and reporting
 	// through the log file.
 	proxy.Verbose = false
+
+	// Configure upstream proxy routing for corporate environments.
+	// This must be done before any requests are handled.
+	if upstreamURL != nil {
+		proxyURLStr := upstreamURL.String()
+
+		// Route plain HTTP (and MITM-decrypted HTTPS) through the upstream proxy.
+		proxy.Tr.Proxy = http.ProxyURL(upstreamURL)
+
+		// Route CONNECT tunnels (raw HTTPS) through the upstream proxy.
+		proxy.ConnectDial = proxy.NewConnectDialToProxy(proxyURLStr)
+	}
 
 	// OnRequest fires for every HTTP request that reaches the proxy,
 	// including CONNECT tunnel requests. We capture the request metadata
