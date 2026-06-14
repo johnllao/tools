@@ -80,6 +80,55 @@ Before planning, gather what the fast model would miss:
 The plan artifact should link to or reference these so the flash model doesn't
 need to re-read the whole codebase.
 
+**Example prompt** — use this as a starting template for asking a pro model to
+write a plan. The key techniques are: naming the flash handoff, listing the
+files to read for context, and being explicit about deliverables.
+
+````markdown
+Plan an HTTP reverse proxy service called `httpreverseproxy` for the project at
+`/Users/johnllao/src/tools`. I'll switch to a flash model for implementation
+after the plan is approved, so the plan must be concrete enough for a developer
+to implement from this document alone.
+
+## Context
+
+Read these files first to understand project conventions:
+- `/Users/johnllao/src/tools/CLAUDE.md` — project conventions and architecture
+- `/Users/johnllao/src/tools/cmd/httptrace/main.go` — existing standalone
+  service for reference (signal-handling pattern, flag parsing, graceful
+  shutdown)
+
+## Requirements
+
+1. Listen on a configurable address loaded from a JSON config file.
+2. Route requests by matching `x-service-name` and `x-environment` headers
+   against an ordered list of routing rules. First match wins.
+3. Wildcard `"*"` matches any header value (including missing).
+4. Forward matched requests via `net/http/httputil.ReverseProxy`.
+5. Strip routing headers from upstream requests (internal metadata).
+6. Graceful shutdown on SIGINT/SIGTERM with 5-second timeout (same pattern
+   as httptrace).
+7. Log requests to stderr: received → completed with status/duration.
+8. JSON error responses when no route matches (502) or upstream unreachable
+   (502).
+
+## Deliverables
+
+Write the plan to `.claude/plans/httpreverseproxy.md` covering:
+
+- **Files affected** — exact paths under `cmd/httpreverseproxy/`, what each
+  file does, why split that way.
+- **Types & structs** — Config, Route, Router, any intermediate types.
+- **Function signatures** — every exported function with params and return
+  types.
+- **Data flow** — startup sequence and per-request lifecycle.
+- **Edge cases** — empty routes, unreachable upstream, missing headers,
+  concurrent requests, empty listen address.
+- **Key decisions & rationale** — why `sync.Map` for proxy cache, why
+  fail-fast config validation, why strip routing headers, why
+  `loggingResponseWriter` wrapper.
+````
+
 ### Step 1: Plan with a capable model
 
 Switch to a pro-tier model explicitly (e.g. `/model deepseek-v4-pro` or
@@ -135,6 +184,29 @@ Please implement it. Read any existing files you need, then create/modify
 the files as specified. If anything in the plan is ambiguous or impossible,
 stop and tell me — don't guess.
 ```
+
+Concrete example using the httpreverseproxy plan from Step 0:
+
+````markdown
+Read the plan at `.claude/plans/httpreverseproxy.md`, then implement it.
+
+First, read the relevant existing files so you follow project conventions:
+- `/Users/johnllao/src/tools/CLAUDE.md`
+- `/Users/johnllao/src/tools/cmd/httptrace/main.go` (for reference)
+
+The plan is the source of truth — don't deviate from it. If anything in the
+plan is ambiguous or impossible, stop and tell me — don't guess.
+
+Be thorough:
+- Handle every edge case listed in the plan.
+- Add godoc comments on every exported type and function following the
+  same verbose, explanatory style used in `cmd/httptrace/main.go`.
+- Run `gofmt -w` on all new files after writing them.
+- After creating the files, run `go build ./cmd/httpreverseproxy/` to
+  confirm it compiles.
+````
+
+**What to watch for:**
 
 **What to watch for:**
 
