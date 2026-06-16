@@ -1,0 +1,246 @@
+/* ── OpenSans font-face declarations ─────────────────────────────────────── */
+
+@font-face {
+    font-display: swap;
+    font-family: 'Open Sans';
+    font-style: normal;
+    font-weight: 400;
+    src: url('./OpenSans-Regular.ttf') format('truetype');
+}
+
+@font-face {
+    font-display: swap;
+    font-family: 'Open Sans';
+    font-style: normal;
+    font-weight: 600;
+    src: url('./OpenSans-SemiBold.ttf') format('truetype');
+}
+
+@font-face {
+    font-display: swap;
+    font-family: 'Open Sans';
+    font-style: normal;
+    font-weight: 700;
+    src: url('./OpenSans-Bold.ttf') format('truetype');
+}
+
+/* ── CSS custom properties ───────────────────────────────────────────────── */
+
+:root {
+    --accent: #4fc3f7;
+    --accent-hover: #29b6f6;
+    --bg-primary: #27374d;
+    --bg-secondary: #526d82;
+    --bg-surface: #526d82;
+    --border: #9db2bf;
+    --error: #ef5350;
+    --scrollbar-thumb: #9db2bf;
+    --scrollbar-track: #27374d;
+    --success: #66bb6a;
+    --text-muted: #9db2bf;
+    --text-primary: #dde6ed;
+    --text-secondary: #9db2bf;
+    --warning: #ffa726;
+}
+
+/* ── Global reset ────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body, #root {
+    height: 100%;
+}
+
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'Open Sans', system-ui, -apple-system, sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scrollbar (dark theme, WebKit only) ──────────────────────────────────── */
+
+::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+::selection {
+    background: var(--accent);
+    color: var(--bg-primary);
+}
+
+/* ── App layout ──────────────────────────────────────────────────────────── */
+
+.app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* ── Header bar ──────────────────────────────────────────────────────────── */
+
+.header {
+    align-items: center;
+    background: color-mix(in srgb, var(--bg-secondary), black 60%);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-shrink: 0;
+    justify-content: space-between;
+    padding: 0.5rem 1rem;
+    gap: 1rem;
+}
+
+.header-left {
+    align-items: center;
+    display: flex;
+    gap: 1rem;
+    min-width: 0;
+}
+
+.header-title {
+    color: var(--accent);
+    font-size: 1rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.header-path {
+    color: var(--text-muted);
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.header-right {
+    align-items: center;
+    display: flex;
+    flex-shrink: 0;
+    gap: 0.5rem;
+}
+
+/* ── Status indicator ────────────────────────────────────────────────────── */
+
+.status-indicator {
+    align-items: center;
+    display: flex;
+    font-size: 0.8rem;
+    gap: 0.35rem;
+    color: var(--text-muted);
+}
+
+.status-label {
+    white-space: nowrap;
+}
+
+.status-clients {
+    font-size: 0.75rem;
+    opacity: 0.7;
+}
+
+.status-dot {
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+    height: 8px;
+    width: 8px;
+}
+
+.status-connected {
+    background: var(--success);
+}
+
+.status-connecting {
+    background: var(--warning);
+    animation: pulse 1s ease-in-out infinite;
+}
+
+.status-disconnected {
+    background: var(--error);
+    animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+
+.btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-family: 'Open Sans', system-ui, -apple-system, sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.3rem 0.6rem;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    white-space: nowrap;
+}
+
+.btn:hover {
+    background: color-mix(in srgb, var(--bg-surface), black 40%);
+    border-color: var(--accent);
+}
+
+.btn-clear:hover {
+    border-color: var(--error);
+    color: var(--error);
+}
+
+/* ── Log display area ────────────────────────────────────────────────────── */
+
+.log-area {
+    flex: 1;
+    font-family: 'Courier New', Courier, 'Liberation Mono', monospace;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    overflow-y: auto;
+}
+
+.log-line {
+    border-bottom: 1px solid color-mix(in srgb, var(--border), transparent 88%);
+    padding: 0.1rem 1rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.log-line:hover {
+    background: color-mix(in srgb, var(--bg-surface), transparent 70%);
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+
+.log-empty {
+    align-items: center;
+    color: var(--text-muted);
+    display: flex;
+    height: 100%;
+    justify-content: center;
+    font-family: 'Open Sans', system-ui, -apple-system, sans-serif;
+}

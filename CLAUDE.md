@@ -50,6 +50,11 @@ kill -SIGUSR1 $PID                                # start capturing
 kill -SIGUSR2 $PID                                # stop capturing
 tail -f trace.jsonl | jq '.request.url'          # inspect traffic live
 
+# Run httptail (log file tailing via HTTP + SSE, with React frontend)
+# Build the frontend first:
+cd web/http-tail && npm run build && cd ../..
+go run ./cmd/httptail -input /var/log/app.log -port 8080
+
 # Run the rediscmd CSV→Redis generator
 go run ./examples/rediscmd -input data.csv -prefix "STATIC:CUSTOMER:"
 
@@ -64,6 +69,15 @@ cd web/console && npm run build
 
 # Lint web console
 cd web/console && npm run lint
+
+# Start http-tail dev server
+cd web/http-tail && npm run dev
+
+# Build http-tail for production
+cd web/http-tail && npm run build
+
+# Lint http-tail
+cd web/http-tail && npm run lint
 ```
 
 ## Commands
@@ -73,10 +87,12 @@ cd web/console && npm run lint
 | `foldermcp` (Go) | `cmd/foldermcp/` | Provides a `read_file` tool to read files from a designated root folder (with path traversal protection) |
 | `logsmcp` | `cmd/logsmcp/` | Provides `list_log_files` and `read_logs` tools to browse and filter JSON-structured log files by level, tail, search text, and limit |
 | `httptrace` | `cmd/httptrace/` | Fiddler-like HTTP/HTTPS MITM proxy — signal-controlled (SIGUSR1 start, SIGUSR2 stop), writes captured sessions as JSON Lines to stdout or `-log-file` |
+| `httptail` | `cmd/httptail/` | HTTP log tailing service — polls a log file and streams new lines to browsers via SSE; serves a React frontend from disk |
 | `foldermcp` (Python) | `scripts/py/foldermcp.py` | Python FastMCP equivalent — provides `list_files` and `read_file` tools, with path traversal protection, shell-style glob patterns, and human-readable file sizes |
 | `rediscmd` | `examples/rediscmd/` | Reads a CSV file and prints Redis `HSET` + `SADD` commands for each row, with an index-set pattern |
 | `redisutil` | `examples/redisutil/` | Reads Redis commands line-by-line from stdin and executes them against a Redis server via the universal `Do()` interface |
 | `console` | `web/console/` | React + Vite web UI with dark theme, 2-column layout (sidebar navigator + content area), and OpenSans fonts |
+| `http-tail` | `web/http-tail/` | React + Vite web UI for httptail — SSE connection to `/events`, auto-scrolling log display, pause/resume, and clear |
 
 ## Code Architecture
 
@@ -85,6 +101,7 @@ cmd/              — Main packages; each subdirectory is a Go binary
   foldermcp/        File-reading MCP server (Go)
   logsmcp/          Log-browsing MCP server (Go)
   httptrace/        HTTP/HTTPS MITM proxy for traffic inspection (Go, standalone)
+  httptail/         HTTP log tailing service with SSE streaming (Go, standalone)
 examples/         — Standalone CLI tools (not MCP servers)
   rediscmd/         CSV → Redis HSET/SADD command generator
   redisutil/        stdin → Redis command executor (universal Do() interface)
@@ -97,6 +114,10 @@ web/              — Front-end web applications
       main.jsx         App entry point with 2-column layout (sidebar + content)
       styles.css       Dark theme styles with OpenSans font-face declarations
       fonts/           OpenSans font files (Regular, SemiBold, Bold)
+  http-tail/        React + Vite web UI for httptail log streaming
+    src/              React app source
+      main.jsx         App entry point with SSE client, auto-scroll, pause/resume
+      styles.css       Dark theme styles (same variables as console)
 pkg/              — Reusable library packages (scaffolding — empty)
 internal/         — Internal packages, not importable outside this module (empty)
 test/             — Tests and test fixtures
@@ -234,3 +255,10 @@ Python MCP servers use the `mcp` package (FastMCP) and live under `scripts/py/`:
 - Vite 8 (dev bundler)
 - ESLint 10 (dev, linting)
 - OpenSans fonts (Regular 400, SemiBold 600, Bold 700) — stored locally under `src/fonts/`
+
+### Web http-tail
+- Node.js + npm
+- React 19, react-dom 19
+- Vite 8 (dev bundler)
+- ESLint 10 (dev, linting)
+- OpenSans fonts (Regular 400, SemiBold 600, Bold 700) — stored locally under `src/`
