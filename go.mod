@@ -4,6 +4,7 @@ go 1.26.3
 
 require (
 	github.com/elazarl/goproxy v1.8.4
+	github.com/expr-lang/expr v1.17.8
 	github.com/mark3labs/mcp-go v0.54.1
 	github.com/redis/go-redis/v9 v9.20.1
 )
