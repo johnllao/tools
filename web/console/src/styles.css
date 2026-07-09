@@ -3,7 +3,7 @@
     font-family: 'Open Sans';
     font-style: normal;
     font-weight: 400;
-    src: url('./fonts/OpenSans-Regular.ttf') format('truetype');
+    src: url('./OpenSans-Regular.ttf') format('truetype');
 }
 
 @font-face {
@@ -11,7 +11,7 @@
     font-family: 'Open Sans';
     font-style: normal;
     font-weight: 600;
-    src: url('./fonts/OpenSans-SemiBold.ttf') format('truetype');
+    src: url('./OpenSans-SemiBold.ttf') format('truetype');
 }
 
 @font-face {
@@ -19,7 +19,7 @@
     font-family: 'Open Sans';
     font-style: normal;
     font-weight: 700;
-    src: url('./fonts/OpenSans-Bold.ttf') format('truetype');
+    src: url('./OpenSans-Bold.ttf') format('truetype');
 }
 
 :root {
@@ -127,6 +127,7 @@ body {
     cursor: pointer;
     font-size: 0.9rem;
     font-weight: 600;
+    margin-bottom: .2em;
     padding: 0.6rem 0.75rem;
     transition: background 0.15s, color 0.15s;
 }
