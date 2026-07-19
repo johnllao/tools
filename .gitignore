@@ -28,8 +28,8 @@ go.work.sum
 .env
 
 # Editor/IDE
-# .idea/
-# .vscode/
+.idea/
+.vscode/
 
 # Claude Code
 .claude/settings.local.json
@@ -43,3 +43,7 @@ go.work.sum
 bin/
 foldermcp
 logsmcp
+
+# Scripts
+scripts/**/*.csv
+scripts/**/__pycache__
